@@ -9,7 +9,8 @@ Copyright (C) 2018
 """
 
 __author__ = 'python273'
-__version__ = '2.2.0'
+__version__ = '3.0.0'
 
-from .api import Telegraph, TelegraphException
-from .upload import upload_file
+from .api import Telegraph, UploadFile
+from .api_async import AsyncTelegraph, AsyncUploadFile
+from .exceptions import *

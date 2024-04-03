@@ -14,7 +14,7 @@ try:
 except ImportError:
     from distutils.core import setup
 
-version = '2.2.0'
+version = '3.0.0'
 
 
 with open('README.md') as f:
@@ -40,10 +40,7 @@ setup(
     license='MIT',
 
     packages=['telegraph'],
-    install_requires=['requests'],
-    extras_require={
-        'aio': ['httpx'],
-    },
+    install_requires=['httpx'],
 
     classifiers=[
         'License :: OSI Approved :: MIT License',
@@ -55,5 +52,6 @@ setup(
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
     ]
 )

@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-import json
-
-import requests
+import httpx
 
 from .exceptions import TelegraphException, RetryAfterError
 from .utils import html_to_nodes, nodes_to_html, FilesOpener, json_dumps
@@ -16,14 +14,17 @@ class TelegraphApi:
     :param domain: domain (e.g. alternative mirror graph.org)
     """
 
-    __slots__ = ('access_token', 'domain', 'session')
+    __slots__ = ('_is_closed', 'access_token', 'domain', 'session')
 
     def __init__(self, access_token=None, domain='telegra.ph'):
+        self._is_closed = False
         self.access_token = access_token
         self.domain = domain
-        self.session = requests.Session()
+        self.session = httpx.Client()
 
     def method(self, method, values=None, path=''):
+        if self._is_closed: raise TelegraphException('Once the client instance has been closed, no more requests can be made.')
+
         values = values.copy() if values is not None else {}
 
         if 'access_token' not in values and self.access_token:
@@ -45,13 +46,8 @@ class TelegraphApi:
             raise TelegraphException(error)
 
     def upload_file(self, f):
-        """ Upload file. NOT PART OF OFFICIAL API, USE AT YOUR OWN RISK
-            Returns a list of dicts with `src` key.
-            Allowed only .jpg, .jpeg, .png, .gif and .mp4 files.
+        if self._is_closed: raise TelegraphException('Once the client instance has been closed, no more requests can be made.')
 
-        :param f: filename or file-like object.
-        :type f: file, str or list
-        """
         with FilesOpener(f) as files:
             response = self.session.post(
                 'https://{}/upload'.format(self.domain),
@@ -71,6 +67,13 @@ class TelegraphApi:
                 raise TelegraphException(error)
 
         return response
+    
+    def close(self):
+        if not self._is_closed:
+            self._is_closed = True
+            self.access_token = None
+            self.domain = None
+            self.session.close()
 
 
 class Telegraph:
@@ -84,10 +87,20 @@ class Telegraph:
 
     def __init__(self, access_token=None, domain='telegra.ph'):
         self._telegraph = TelegraphApi(access_token, domain)
+    
+    def __enter__(self):
+        return self
 
+    def __exit__(self, type, value, traceback):
+        self._telegraph.close()
+    
     def get_access_token(self):
         """Get current access_token"""
         return self._telegraph.access_token
+    
+    def get_base_url(self):
+        """Get current Telegraph url"""
+        return f"https://{self._telegraph.domain}"
 
     def create_account(self, short_name, author_name=None, author_url=None,
                        replace_token=True):
@@ -260,12 +273,32 @@ class Telegraph:
             'hour': hour
         })
 
-    def upload_file(self, f):
+    def upload_file(self, file):
         """ Upload file. NOT PART OF OFFICIAL API, USE AT YOUR OWN RISK
             Returns a list of dicts with `src` key.
             Allowed only .jpg, .jpeg, .png, .gif and .mp4 files.
 
-        :param f: filename or file-like object.
-        :type f: file, str or list
+        :param file: filename or file-like object.
+        :type file: file, str or list
         """
-        return self._telegraph.upload_file(f)
+        return self._telegraph.upload_file(file)
+    
+    def close(self):
+        """ Close Session"""
+        self._telegraph.close()
+
+
+def UploadFile(file, domain='telegra.ph'):
+    """ Upload file. NOT PART OF OFFICIAL API, USE AT YOUR OWN RISK
+        Returns a list of dicts with `src` key.
+        Allowed only .jpg, .jpeg, .png, .gif and .mp4 files.
+
+    :param file: filename or file-like object.
+    :param domain: domain (e.g. alternative mirror graph.org)
+    """
+    _telegraph = TelegraphApi(domain=domain)
+    res = _telegraph.upload_file(file)
+    urls = [f"https://{_telegraph.domain}{i['src']}" for i in res]
+    _telegraph.close()
+    return urls
+

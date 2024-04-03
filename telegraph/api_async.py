@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
-import json
-
 import httpx
 
 from .exceptions import TelegraphException, RetryAfterError
 from .utils import html_to_nodes, nodes_to_html, FilesOpener, json_dumps
 
 
-class TelegraphApi:
-    """ Telegraph API Client
+class AsyncTelegraphApi:
+    """ Telegraph API Async Client
 
     :param access_token: access_token
     :type access_token: str
@@ -16,14 +14,17 @@ class TelegraphApi:
     :param domain: domain (e.g. alternative mirror graph.org)
     """
 
-    __slots__ = ('access_token', 'domain', 'session')
+    __slots__ = ('_is_closed', 'access_token', 'domain', 'session')
 
     def __init__(self, access_token=None, domain='telegra.ph'):
+        self._is_closed = False
         self.access_token = access_token
         self.domain = domain
         self.session = httpx.AsyncClient()
 
     async def method(self, method, values=None, path=''):
+        if self._is_closed: raise TelegraphException('Once the client instance has been closed, no more requests can be made.')
+
         values = values.copy() if values is not None else {}
 
         if 'access_token' not in values and self.access_token:
@@ -45,13 +46,8 @@ class TelegraphApi:
             raise TelegraphException(error)
 
     async def upload_file(self, f):
-        """ Upload file. NOT PART OF OFFICIAL API, USE AT YOUR OWN RISK
-            Returns a list of dicts with `src` key.
-            Allowed only .jpg, .jpeg, .png, .gif and .mp4 files.
+        if self._is_closed: raise TelegraphException('Once the client instance has been closed, no more requests can be made.')
 
-        :param f: filename or file-like object.
-        :type f: file, str or list
-        """
         with FilesOpener(f) as files:
             response = (await self.session.post(
                 'https://{}/upload'.format(self.domain),
@@ -71,10 +67,17 @@ class TelegraphApi:
                 raise TelegraphException(error)
 
         return response
+    
+    async def close(self):
+        if self._is_closed:
+            self._is_closed = True
+            self.access_token = None
+            self.domain = None
+            await self.session.aclose()
 
 
-class Telegraph:
-    """ Telegraph API client helper
+class AsyncTelegraph:
+    """ Telegraph API Async client helper
 
     :param access_token: access token
     :param domain: domain (e.g. alternative mirror graph.org)
@@ -83,11 +86,21 @@ class Telegraph:
     __slots__ = ('_telegraph',)
 
     def __init__(self, access_token=None, domain='telegra.ph'):
-        self._telegraph = TelegraphApi(access_token, domain)
+        self._telegraph = AsyncTelegraphApi(access_token, domain)
+    
+    async def __aenter__(self):
+        return self
 
-    def get_access_token(self):
+    async def __aexit__(self, type, value, traceback):
+        await self._telegraph.close()
+    
+    async def get_access_token(self):
         """Get current access_token"""
         return self._telegraph.access_token
+    
+    async def get_base_url(self):
+        """Get current Telegraph url"""
+        return f"https://{self._telegraph.domain}"
 
     async def create_account(self, short_name, author_name=None, author_url=None,
                        replace_token=True):
@@ -220,7 +233,7 @@ class Telegraph:
         :param fields: List of account fields to return. Available fields:
                        short_name, author_name, author_url, auth_url, page_count
 
-                       Default: [“short_name”,“author_name”,“author_url”]
+                       Default: [�short_name�,�author_name�,�author_url�]
         """
         return (await self._telegraph.method('getAccountInfo', {
             'fields': json_dumps(fields) if fields else None
@@ -260,12 +273,32 @@ class Telegraph:
             'hour': hour
         }))
 
-    async def upload_file(self, f):
+    async def upload_file(self, file):
         """ Upload file. NOT PART OF OFFICIAL API, USE AT YOUR OWN RISK
             Returns a list of dicts with `src` key.
             Allowed only .jpg, .jpeg, .png, .gif and .mp4 files.
 
-        :param f: filename or file-like object.
-        :type f: file, str or list
+        :param file: filename or file-like object.
+        :type file: file, str or list
         """
-        return (await self._telegraph.upload_file(f))
+        return (await self._telegraph.upload_file(file))
+    
+    async def close(self):
+        """ Close Session"""
+        await self._telegraph.close()
+
+
+async def AsyncUploadFile(file, domain='telegra.ph'):
+    """ Upload file. NOT PART OF OFFICIAL API, USE AT YOUR OWN RISK
+        Returns a list of dicts with `src` key.
+        Allowed only .jpg, .jpeg, .png, .gif and .mp4 files.
+
+    :param file: filename or file-like object.
+    :param domain: domain (e.g. alternative mirror graph.org)
+    """
+    _telegraph = AsyncTelegraphApi(domain=domain)
+    res = await _telegraph.upload_file(file)
+    urls = [f"{_telegraph.domain}{i['src']}" for i in res]
+    await _telegraph.close()
+    return urls
+
