@@ -27,6 +27,6 @@ __all__ = (
     'InvalidHTML'
 )
 
-from .api import Telegraph, UploadFile
-from .api_async import AsyncTelegraph, AsyncUploadFile
+from ._api import Telegraph, UploadFile
+from ._api_async import AsyncTelegraph, AsyncUploadFile
 from .exceptions import TelegraphException, ResponseNotOk, RetryAfterError, ParsingException, NotAllowedTag, InvalidHTML
