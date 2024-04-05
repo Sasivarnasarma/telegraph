@@ -1,16 +1,32 @@
 # -*- coding: utf-8 -*-
 
 """
+Python Telegraph API wrapper
+
 @author: python273
 @contact: https://python273.pw
 @license MIT License, see LICENSE file
 
-Copyright (C) 2018
+Copyright (C) 2024
 """
 
+__title__  = 'telegraph'
 __author__ = 'python273'
 __version__ = '3.0.0'
+__all__ = (
+    '__version__',
+    'Telegraph',
+    'UploadFile',
+    'AsyncTelegraph',
+    'AsyncUploadFile',
+    'TelegraphException',
+    'ResponseNotOk',
+    'RetryAfterError',
+    'ParsingException',
+    'NotAllowedTag',
+    'InvalidHTML'
+)
 
 from .api import Telegraph, UploadFile
 from .api_async import AsyncTelegraph, AsyncUploadFile
-from .exceptions import *
+from .exceptions import TelegraphException, ResponseNotOk, RetryAfterError, ParsingException, NotAllowedTag, InvalidHTML

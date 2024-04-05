@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-import httpx
+from httpx import AsyncClient
 
-from .exceptions import TelegraphException, RetryAfterError
+from .exceptions import TelegraphException, ResponseNotOk, RetryAfterError
 from .utils import html_to_nodes, nodes_to_html, FilesOpener, json_dumps
 
 
@@ -20,21 +20,29 @@ class AsyncTelegraphApi:
         self._is_closed = False
         self.access_token = access_token
         self.domain = domain
-        self.session = httpx.AsyncClient()
+        self.session = AsyncClient()
 
     async def method(self, method, values=None, path=''):
         if self._is_closed: raise TelegraphException('Once the client instance has been closed, no more requests can be made.')
+
+        if method != 'createAccount':
+            if not self.access_token:
+                raise TelegraphException("There was no access token given. Provide an access token or try create_account.")
 
         values = values.copy() if values is not None else {}
 
         if 'access_token' not in values and self.access_token:
             values['access_token'] = self.access_token
 
-        response = (await self.session.post(
+        response = await self.session.post(
             'https://api.{}/{}/{}'.format(self.domain, method, path),
             data=values
-        )).json()
+        )
 
+        if response.status_code >= 400:
+            raise ResponseNotOk(response)
+        
+        response = response.json()
         if response.get('ok'):
             return response['result']
 
@@ -49,11 +57,15 @@ class AsyncTelegraphApi:
         if self._is_closed: raise TelegraphException('Once the client instance has been closed, no more requests can be made.')
 
         with FilesOpener(f) as files:
-            response = (await self.session.post(
+            response = await self.session.post(
                 'https://{}/upload'.format(self.domain),
                 files=files
-            )).json()
-
+            )
+        
+        if response.status_code >= 400:
+            raise ResponseNotOk(response)
+        
+        response = response.json()
         if isinstance(response, list):
             error = response[0].get('error')
         else:
